@@ -55,6 +55,7 @@ describe 'Compiler API', ->
         @timeout 10000
         data =
           target: "arduino-nano328"
+          graph: { file: 'spec/data/blink.fbp', content_type: 'text/plain' }
         options =
           multipart: true
         job = null

@@ -20,17 +20,30 @@ class CompileJob
         @progress = 0
         @process = null
 
+        fs.mkdirSync @workdir # FIXME: syncronous IO
+
     build: () ->
         if @status != 'new'
             return
 
-        makeFile = './node_modules/microflo/Makefile'
-        target = 'build-arduino'
+        microFlo = './node_modules/microflo'
+        makeFile = microFlo+'/Makefile'
+        sourceDir = microFlo+'/microflo'
+        target = 'build-arduino-min'
         cmd = 'make'
-        args = [ '-f', makeFile, target, "BUILD_DIR=#{@workdir}"]
+        execPath = process.env.PATH.toString()
+        console.log @files
+        graph = path.join @workdir, @files['graph'] or ''
+        args = [
+          '-f', makeFile,
+          target,
+          "BUILD_DIR=#{@workdir}", "MICROFLO_SOURCE_DIR=#{sourceDir}",
+          "GRAPH=#{graph}"
+        ]
         options =
-            cwd: './'
-            timeout: 60*10e3
+          cwd: './'
+          timeout: 60*10e3
+          env: "#{microFlo}:#{execPath}"
 
         console.log cmd, args.join ' ' if @options.verbose
         @process = child_process.spawn cmd, args
@@ -45,7 +58,7 @@ class CompileJob
             @status = 'unknown'
 
     receiveFile: (fieldname, file, filename) ->
-        @files[filename] = filename
+        @files[fieldname] = filename
         p = path.join @workdir, filename
         stream = fs.createWriteStream p
         file.pipe stream
