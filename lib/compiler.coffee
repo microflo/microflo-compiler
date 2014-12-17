@@ -12,20 +12,37 @@ class CompileJob
         @files = {}
         @fields = {}
         @status = 'new'
+        @options =
+            verbose: true
 
-        @output = null
+        @stdout = ""
+        @stderr = ""
         @progress = 0
+        @process = null
 
     build: () ->
         if @status != 'new'
             return
 
-        command = 'make'
+        makeFile = './node_modules/microflo/Makefile'
+        target = 'build-arduino'
+        cmd = 'make'
+        args = [ '-f', makeFile, target, "BUILD_DIR=#{@workdir}"]
         options =
             cwd: './'
             timeout: 60*10e3
-        child_process.exec command, (error, stdout, stderr) =>
-            @state = if error then 'build-error' else 'build-completed'
+
+        console.log cmd, args.join ' ' if @options.verbose
+        @process = child_process.spawn cmd, args
+        @process.stdout.on 'data', (data) =>
+            @stdout += data.toString()
+        @process.stderr.on 'data', (data) =>
+            @stderr += data.toString()
+        @process.on 'error', =>
+           @status = 'spawn-error'
+        @process.on 'close', =>
+            console.log 'close', @stderr, @stdout if @options.verbose
+            @status = 'unknown'
 
     receiveFile: (fieldname, file, filename) ->
         @files[filename] = filename
@@ -42,7 +59,8 @@ class CompileJob
             files: @files
             attributes: @fields
             progress: @progress
-            output: @output
+            stdout: @stdout
+            stderr: @stderr
         return s
 
 getApp = () ->
@@ -53,7 +71,7 @@ getApp = () ->
     app.jobs = {} # TODO: use database, or re-populate from disk on startup
 
     app.post '/job', (req, res) ->
-        jobId = (new chance()).string()
+        jobId = (new chance()).guid()
         job = new CompileJob path.join app.workdir, jobId
         app.jobs[jobId] = job
 
@@ -75,7 +93,7 @@ getApp = () ->
 
     app.get '/job/:id', (req, res) ->
         job = app.jobs[req.params.id]
-        if !job?
+        if not job?
             res.status 404
             return res.end()
         res.json job.getState()
